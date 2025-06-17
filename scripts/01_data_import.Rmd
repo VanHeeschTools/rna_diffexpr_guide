@@ -1,0 +1,300 @@
+---
+title: "Import and Prepare Transcript Quantifications and Metadata"
+author: "Wouter Makkinje"
+date: "2025-06-06"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "htmls") })
+output:
+  html_document:
+    theme: default
+    highlight: textmate
+    toc: true
+    toc_depth: 4
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE)
+```
+
+## Summary
+The first step to our differential expression analysis is collecting and preparing all the necessary data. We will require:
+
+1. A metadata file providing all necessary information on the RNAseq samples.
+2. A .gtf annotation file that contains transcript information like length, Biotype (protein_coding, lncRNA, etc.) and associated gene name.
+3. The transcript quantification data, or quant files. These come as separate quant.sf files for each sample as an output from [Salmon](https://combine-lab.github.io/salmon/)
+
+## Set Up
+Avoid installing or updating R packages on the shared HPC environment to maintain compatibility with others’ scripts.
+
+```{r Installing packages, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
+#install.packages("dplyr")
+#install.packages("rentrez")
+#install.packages("XML")
+#if (!require("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("rtracklayer")
+
+```
+
+```{r Loading libraries, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
+library(dplyr) # dataframe manipulation
+library(tidyr) # dataframe manipulation
+library(rentrez) # obtain metadata through NCBI
+library(XML) # convert metadata from XML format to list
+library(rtracklayer) # importing a gtf file
+```
+
+```{r Set up work environment, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
+# Save your work directory in a variable
+workdir <- getwd() # Or specify a specific work directory
+
+# Specify the Bioproject ID if you're working with data from NCBI
+Bioproject_id <- "PRJNA000000"
+```
+
+
+
+## Sample Metadata
+Your RNAseq data is likely either collected from NCBI or DISQOVER. Here we'll describe how to import and structure metadata from these sources for downstream analyses.
+
+### NCBI
+#### Importing NCBI metadata
+You can automatically retrieve metadata from NCBI if you're working with deposited RNAseq data. We will use rentrez to collect metadata on the samples (or runs; SRR IDs) contained within the Bioproject that you've specified above.
+
+```{r rentrez collect metadata, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
+# Search the SRA database for the bioproject id to get a search (web_history) list
+sra_search <- rentrez::entrez_search(db = "sra", term = Bioproject_id, use_history = TRUE)
+
+# Use the search result to extract information on the project ids
+sra_summary <- rentrez::entrez_summary(db = "sra", web_history = sra_search$web_history)
+
+# A function that flattens the listed information on expxml and runs to one list of lists for each run within the Bioproject
+parse_sra_entry <- function(e_summary) {
+  # Parse "expxml" information and convert the XML format to list and return an error if it doesn't exist
+  if (!"expxml" %in% names(e_summary)) {
+  stop("The 'expxml' field is missing from the summary object.")
+  } # Checks if "expxml" is present within the sra_summary. This should contain all metadata. If not, check if it is stored under a different name or if your sra_summary object is complete
+  xml_expxml<- e_summary[["expxml"]]
+  wrapped_xml_expxml <- paste0("<Root>", xml_expxml, "</Root>") # xmlToList requires a root node
+  sra_list_expxml <- XML::xmlToList(wrapped_xml_expxml)
+  
+  # Parse "runs" information and convert the XML format to list and return an error if it doesn't exist
+  if (!"runs" %in% names(e_summary)) {
+  stop("The 'runs' field is missing from the summary object.")
+  } # Performs the same check for "runs" that should contain the SRR IDs
+  xml_runs <- e_summary[["runs"]]
+  wrapped_xml_runs <- paste0("<Root>", xml_runs, "</Root>") # xmlToList requires a root node
+  sra_list_runs <- XML::xmlToList(wrapped_xml_runs)
+  
+  # Combine the "expxml" and "runs" lists and flatten the information contained within the lists
+  sra_comb_list <- c(sra_list_expxml, sra_list_runs)
+  sra_unlist <- unlist(sra_comb_list)
+  
+  # Convert to data frame row
+  df <- as.data.frame(t(sra_unlist), stringsAsFactors = FALSE)
+  
+  # Returns the dataframe
+  df
+}
+
+# Apply to full list
+sra_lists <- lapply(sra_summary, parse_sra_entry)
+
+# Combine the separate metadata lists into one dataframe and rename the rows to the "SRR" ids
+metadata_df_raw <- do.call(rbind, sra_lists) # do.call() unpacks the list into multiple individual rbind() arguments
+
+# Assign row names
+rownames(metadata_df_raw) <- metadata_df_raw$Run.acc # Assign the contents of a column, in this case SRR accessions to row names
+```
+
+### DISQOVER
+Metadata from RNAseq samples generated from patients is retrieved from DISQOVER. These data is merged from information on:
+
+* Biosource: biological samples, such as biopsies, obtained from patients
+* Biomaterial: samples derived from the biosource, such as RNA
+* Subject: patient information
+* Diagnosis: identified disease or condition
+
+**Never hardcode any biosource, biomaterial or subject IDs. In other words, these IDs should never show up within your code.**
+If you need to select specific entries for exclusion or downstream analysis, use identifiers or metadata that differ from the actual IDs. If there is nothing to subset on, use row numbers or exclude it from the original metadata file.
+
+#### Importing DISQOVER metadata
+If you're working on RNAseq data generated within our lab or center, you can import the merged metadata from a file stored in your work directory. 
+```{r importing DISQOVER metadata}
+# Import the metadata file
+metadata_df_raw <- read.delim(
+  paste(workdir,"name_of_metadata.file", sep="/"), # Change the name of the metadata file
+  sep="\t", # Change the separator to the one used in the file
+  na.strings = c("","NA") # Assign NA to empty and "NA" strings
+  )
+```
+
+#### Cleaning DISQOVER metadata
+In the past, DISQOVER has contained duplicate entries with different cram files from the same Biomaterial. Therefore, we will check for rows that contain duplicate information.
+```{r}
+# Check for duplicate information.
+check_dup <- length(unique(metadata_df_raw$Biomaterial.ID)) == nrow(metadata_df_raw) # Check if every row has a unique Biomaterial ID
+
+# You may want to check which IDs are duplicated to select correct cram files
+#metadata_df_raw[duplicated(metadata_df_raw[,setdiff(names(metadata_df_raw), "file")]),] # Show entries that are duplicated. setdiff() excludes the "file" column from the duplicate check
+#biomat_dup <- metadata_df_raw[duplicated(metadata_df_raw[,setdiff(names(metadata_df_raw), "file")]),]$Biomaterial.ID # Grab duplicated IDs
+
+# We can then write an if statement to remove duplicates if they are present
+if (!check_dup) {
+  metadata_df_raw <- metadata_df_raw[!duplicated(metadata_df_raw[, setdiff(names(metadata_df_raw), "file")]), ]
+}
+
+# Now each sample can be assigned to a unique Biomaterial.ID
+rownames(metadata_df_raw) <- metadata_df_raw$Biomaterial.ID
+```
+
+### Selecting and structuring metadata
+Now that we have our raw metadata file, we can select the information we need and assign groups for the differential expression study.
+
+To perform transformations on our metadata file, we will use the dplyr and tidyr packages, both part of the tidyverse collection and powerful data manipulation tools:
+
+* [dplyr](https://dplyr.tidyverse.org/) is used for data manipulation, like filtering, sorting an modifying data
+* [tidyr](https://tidyr.tidyverse.org/) is used for data reshaping, like splitting or combining columns
+
+In data manipulation, we often need to perform multiple transformations in sequence. To make such code more readable, we use the pipe operator "%>%", which passes the output of one function as the first argument to the next. The examples used here are based on DISQOVER metadata.
+
+
+```{r selecting and filtering metadata}
+# Select columns of interest
+colnames(metadata_df_raw) # Show the names of all columns
+keep_cols <- c("Biomaterial.ID","Biosource.ID","Individual.ID","file","Disease.status","Date.informed.consent.withdrawn","Age.at.first.diagnosis","ann_tumor_type") # Select the information you are interested in, this is just an example
+
+# Use the select function from dplyr to select the columns within keep_cols
+metadata_df_sel <- metadata_df_raw %>% 
+  dplyr::select(tidyr::all_of(keep_cols)) # the all_of function forces to read the vector instead of the string "keep_cols"
+
+# You can then conditionally filter for samples. For instance, with DISQOVER metadata, it is good to check if there are Biomaterial samples with "normal" disease status and possibly remove them as such
+metadata_df_filt <- metadata_df_sel %>% filter(!Disease.status == "normal")
+# Or do multiple filtering steps at once
+metadata_df_filt <- metadata_df_filt %>% 
+  filter(is.na(Date.informed.consent.withdrawn)) %>% # Make sure there are no samples from patients who've withdrawn consent
+  filter(Age.at.first.diagnosis > 10) # Filter for patients older than 10
+```
+
+Finally, specify the sample groups (e.g., treated vs. control or disease type) to compare in the differential expression analysis. You may want to assign an existing column to group, or create a new variable based on the entries of another variable. In this example, we'll create group ID's for different cancer types.
+
+```{r specify group variable}
+# Check for the available cancer types within our data
+unique(metadata_df_filt$ann_tumor_type)
+
+# Do some more filtering
+metadata_df_filt <- metadata_df_filt %>% 
+  filter(!is.na(ann_tumor_type)) %>%
+  filter(ann_tumor_type != "other")
+
+# Then assign the different group identifiers to group names 
+metadata_df_filt <- metadata_df_filt %>%
+  mutate(group = case_when(
+    grepl("Astrocytoma", ann_tumor_type) ~ "AST",
+    grepl("EPN", ann_tumor_type) ~ "EPN",
+    grepl("Teratoma", ann_tumor_type) ~ "TER",
+    grepl("OS", ann_tumor_type) ~ "OS",
+    grepl("MBL", ann_tumor_type) ~ "MBL",
+    grepl("Burkitt", ann_tumor_type) ~ "BL",
+    grepl("EWS", ann_tumor_type) ~ "EWS",
+    grepl("Glioma, malignant", ann_tumor_type) ~ "GLM",
+    grepl("B-ALL", ann_tumor_type) ~ "BALL",
+    grepl("Hodgkin lymphoma", ann_tumor_type) ~ "HL",
+    grepl("NBL", ann_tumor_type) ~ "NBL",
+    grepl("T-ALL", ann_tumor_type) ~ "TALL",
+    grepl("Lymphoma, other", ann_tumor_type) ~ "LYM",
+    grepl("RMS", ann_tumor_type) ~ "RMS",
+    grepl("Glioma", ann_tumor_type) ~ "GLI",
+    grepl("Craniopharyngioma", ann_tumor_type) ~ "CPG",
+    grepl("AML", ann_tumor_type) ~ "AML",
+    grepl("Nephroblastoma", ann_tumor_type) ~ "NEP",
+    TRUE ~ "other"
+  ))
+
+# Save your metadata to a easily recognisable name
+sample_metadata <- metadata_df_filt
+```
+
+
+## GTF annotation file
+
+GTF annotation files provide information on genomic features, like the location and identities of genes, exons and transcripts. We can use rtracklayer to import information this information as a dataframe. As we're performing differential gene expression through RNAseq, we are only interested in transcript data.
+
+```{r importing gtf file}
+# Import the gtf file from your work directory and save it as a dataframe
+gtf_df <- rtracklayer::import(list.files(path = workdir, pattern = "\\.gtf$", full.names = TRUE)) %>% # Matches any file that ends with .gtf
+  as.data.frame()
+```
+
+Next, we'll create conversion tables that link transcript IDs to gene IDs.
+
+```{r creating tx2gene}
+# Creating a transcript to gene id conversion table
+tx2gene <- gtf_df %>% 
+  dplyr::filter(type == "transcript") %>% # filter only for the transcripts
+  dplyr::select(transcript_id, gene_id) %>%
+  dplyr::distinct() #Removes duplicate rows from the data, for example when an exon is described in multiple ways (in different exons)
+```
+
+At some point we want to look at the identity of the genes we're looking at and you might be interested in a specific type of transcript like lncRNAs. This conversion table you can use later on in the analysis.
+
+```{r collecting tx metadata}
+tx_metadata <- gtf_df %>% 
+  dplyr::filter(type == "transcript") %>%
+  dplyr::select(transcript_id, gene_id, gene_name, gene_biotype) %>%
+  dplyr::distinct()
+```
+
+
+## Transcript quantification data
+Transcript quantifications, estimated through salmon by you or one of the bioinformaticians, should be stored in your working environment. Each quant.sf file must be placed in its own folder, named after the corresponding sample.
+
+First we create a list referencing the path to each quantfile to the sample ID.
+```{r collecting quantfiles}
+# Create a list of the filenames by their directory. Filtering for only the quant.sf files.
+list_quantfiles_all <- list.files(workdir, recursive = T, pattern = "quant.sf", full.names = T)
+
+# Set the names for the folder (the last name of the path) to the list, so each item of the list gets the name of the sample
+names(list_quantfiles_all) <- gsub(".*/","",dirname(list_quantfiles_all)) # gsub substitutes every character before the last "/" of the directory name with an empty string ""
+
+# Then we filter out quantfiles for samples we do not use based on our metadata_df selection
+list_quantfiles <- list_quantfiles_all[names(list_quantfiles_all) %in% rownames(metadata_df)]
+```
+
+Then we use tximport to import transcript-level abundances from the quantfiles. tximport summarises this information to the gene-level using our gene-to-transcript conversion table. It returns a list of several matrices containing information on transcript counts, abundance (TPM-normalised counts) and length, per sample. Note that DESeq2 will require raw count data.
+
+```{r importing tx abundance}
+# Import transcript level abundances
+tx_abundance <- tximport::tximport(list_quantfiles, type = "salmon", tx2gene =  tx2gene)
+
+```
+
+
+## Check and save your data
+Finally we make sure we've created all the necessary objects that we need, and that they align with each other. We then save this information in a .RData file.
+The objects we'll need to continue our analysis are:
+
+* tx_abundance: Transcript count and abundance information
+* sample_metadata: Sample metadata
+* tx_metadata: Information on transcript ids and associated gene ids, names and biotypes
+
+Some sanity checks.
+```{r sanity checks}
+# Check if the number of samples fits your expectations and is equal in the abundance and sample metadata files
+length(colnames(tx_abundance$abundance))
+length(rownames(sample_metadata))
+
+# Check if the names of the samples in the metadata are the same and in the same order as those in the txi dataframe. 
+rownames(sample_metadata) == colnames(tx_abundance$abundance) 
+#Or
+all(rownames(sample_metadata) == colnames(tx_abundance$abundance))
+```
+
+After you've made sure your objects are aligned and complete, save your objects in a .RData file
+
+```{r saving RData}
+save(tx_abundance, sample_metadata, tx_metadata, file = paste0(workdir, "/DESeq2_input_data_", Sys.Date(), ".RData"))
+```
+
+
+
+
