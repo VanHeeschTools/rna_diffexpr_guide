@@ -8,7 +8,10 @@ This is a general guide for performing a differential expression study on RNAseq
 - [Usage](#usage)
 ## Features
 
-1. 01_data_import: https://vanheeschtools.github.io/rna_diffexpr_guide/htmls/01_data_import.html
+
+0. [00_guidelines.Rmd](https://vanheeschtools.github.io/rna_diffexpr_guide/htmls/00_guidelines.html)
+* general guidelines for how to set up a project and using R, RStudio and RMarkdown
+1. [01_data_import.Rmd](https://vanheeschtools.github.io/rna_diffexpr_guide/htmls/01_data_import.html)
 * import sample metadata, gtf file and transcript count data
 
 

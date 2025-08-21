@@ -15,14 +15,14 @@ output:
 knitr::opts_chunk$set(echo = TRUE, eval=FALSE)
 ```
 
-## Summary
+# Summary
 The first step to our differential expression analysis is collecting and preparing all the necessary data. We will require:
 
 1. A metadata file providing all necessary information on the RNAseq samples.
 2. A .gtf annotation file that contains transcript information like length, Biotype (protein_coding, lncRNA, etc.) and associated gene name.
 3. The transcript quantification data, or quant files. These come as separate quant.sf files for each sample as an output from [Salmon](https://combine-lab.github.io/salmon/)
 
-## Set Up
+# Set Up
 Avoid installing or updating R packages on the shared HPC environment to maintain compatibility with others’ scripts.
 
 ```{r Installing packages, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
@@ -53,11 +53,11 @@ Bioproject_id <- "PRJNA000000"
 
 
 
-## Sample Metadata
+# Sample Metadata
 Your RNAseq data is likely either collected from NCBI or DISQOVER. Here we'll describe how to import and structure metadata from these sources for downstream analyses.
 
-### NCBI
-#### Importing NCBI metadata
+## NCBI
+### Importing NCBI metadata
 You can automatically retrieve metadata from NCBI if you're working with deposited RNAseq data. We will use rentrez to collect metadata on the samples (or runs; SRR IDs) contained within the Bioproject that you've specified above.
 
 ```{r rentrez collect metadata, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
@@ -106,7 +106,7 @@ metadata_df_raw <- do.call(rbind, sra_lists) # do.call() unpacks the list into m
 rownames(metadata_df_raw) <- metadata_df_raw$Run.acc # Assign the contents of a column, in this case SRR accessions to row names
 ```
 
-### DISQOVER
+## DISQOVER
 Metadata from RNAseq samples generated from patients is retrieved from DISQOVER. These data is merged from information on:
 
 * Biosource: biological samples, such as biopsies, obtained from patients
@@ -117,7 +117,7 @@ Metadata from RNAseq samples generated from patients is retrieved from DISQOVER.
 **Never hardcode any biosource, biomaterial or subject IDs. In other words, these IDs should never show up within your code.**
 If you need to select specific entries for exclusion or downstream analysis, use identifiers or metadata that differ from the actual IDs. If there is nothing to subset on, use row numbers or exclude it from the original metadata file.
 
-#### Importing DISQOVER metadata
+### Importing DISQOVER metadata
 If you're working on RNAseq data generated within our lab or center, you can import the merged metadata from a file stored in your work directory. 
 ```{r importing DISQOVER metadata}
 # Import the metadata file
@@ -128,7 +128,7 @@ metadata_df_raw <- read.delim(
   )
 ```
 
-#### Cleaning DISQOVER metadata
+### Cleaning DISQOVER metadata
 In the past, DISQOVER has contained duplicate entries with different cram files from the same Biomaterial. Therefore, we will check for rows that contain duplicate information.
 ```{r}
 # Check for duplicate information.
@@ -147,7 +147,7 @@ if (!check_dup) {
 rownames(metadata_df_raw) <- metadata_df_raw$Biomaterial.ID
 ```
 
-### Selecting and structuring metadata
+## Selecting and structuring metadata
 Now that we have our raw metadata file, we can select the information we need and assign groups for the differential expression study.
 
 To perform transformations on our metadata file, we will use the dplyr and tidyr packages, both part of the tidyverse collection and powerful data manipulation tools:
@@ -181,7 +181,7 @@ Finally, specify the sample groups (e.g., treated vs. control or disease type) t
 # Check for the available cancer types within our data
 unique(metadata_df_filt$ann_tumor_type)
 
-# Do some more filtering
+# Filter out NA values and "other" tumor types
 metadata_df_filt <- metadata_df_filt %>% 
   filter(!is.na(ann_tumor_type)) %>%
   filter(ann_tumor_type != "other")
@@ -215,7 +215,7 @@ sample_metadata <- metadata_df_filt
 ```
 
 
-## GTF annotation file
+# GTF annotation file
 
 GTF annotation files provide information on genomic features, like the location and identities of genes, exons and transcripts. We can use rtracklayer to import information this information as a dataframe. As we're performing differential gene expression through RNAseq, we are only interested in transcript data.
 
@@ -245,7 +245,7 @@ tx_metadata <- gtf_df %>%
 ```
 
 
-## Transcript quantification data
+# Transcript quantification data
 Transcript quantifications, estimated through salmon by you or one of the bioinformaticians, should be stored in your working environment. Each quant.sf file must be placed in its own folder, named after the corresponding sample.
 
 First we create a list referencing the path to each quantfile to the sample ID.
@@ -269,7 +269,7 @@ tx_abundance <- tximport::tximport(list_quantfiles, type = "salmon", tx2gene =  
 ```
 
 
-## Check and save your data
+# Check and save your data
 Finally we make sure we've created all the necessary objects that we need, and that they align with each other. We then save this information in a .RData file.
 The objects we'll need to continue our analysis are:
 

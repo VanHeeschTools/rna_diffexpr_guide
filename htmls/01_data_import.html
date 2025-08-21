@@ -383,8 +383,8 @@ data</a></li>
 </ul>
 </div>
 
-<div id="summary" class="section level2">
-<h2>Summary</h2>
+<div id="summary" class="section level1">
+<h1>Summary</h1>
 <p>The first step to our differential expression analysis is collecting
 and preparing all the necessary data. We will require:</p>
 <ol style="list-style-type: decimal">
@@ -397,8 +397,8 @@ name.</li>
 separate quant.sf files for each sample as an output from <a href="https://combine-lab.github.io/salmon/">Salmon</a></li>
 </ol>
 </div>
-<div id="set-up" class="section level2">
-<h2>Set Up</h2>
+<div id="set-up" class="section level1">
+<h1>Set Up</h1>
 <p>Avoid installing or updating R packages on the shared HPC environment
 to maintain compatibility with others’ scripts.</p>
 <pre class="r"><code>#install.packages(&quot;dplyr&quot;)
@@ -418,15 +418,15 @@ workdir &lt;- getwd() # Or specify a specific work directory
 # Specify the Bioproject ID if you&#39;re working with data from NCBI
 Bioproject_id &lt;- &quot;PRJNA000000&quot;</code></pre>
 </div>
-<div id="sample-metadata" class="section level2">
-<h2>Sample Metadata</h2>
+<div id="sample-metadata" class="section level1">
+<h1>Sample Metadata</h1>
 <p>Your RNAseq data is likely either collected from NCBI or DISQOVER.
 Here we’ll describe how to import and structure metadata from these
 sources for downstream analyses.</p>
-<div id="ncbi" class="section level3">
-<h3>NCBI</h3>
-<div id="importing-ncbi-metadata" class="section level4">
-<h4>Importing NCBI metadata</h4>
+<div id="ncbi" class="section level2">
+<h2>NCBI</h2>
+<div id="importing-ncbi-metadata" class="section level3">
+<h3>Importing NCBI metadata</h3>
 <p>You can automatically retrieve metadata from NCBI if you’re working
 with deposited RNAseq data. We will use rentrez to collect metadata on
 the samples (or runs; SRR IDs) contained within the Bioproject that
@@ -476,8 +476,8 @@ metadata_df_raw &lt;- do.call(rbind, sra_lists) # do.call() unpacks the list int
 rownames(metadata_df_raw) &lt;- metadata_df_raw$Run.acc # Assign the contents of a column, in this case SRR accessions to row names</code></pre>
 </div>
 </div>
-<div id="disqover" class="section level3">
-<h3>DISQOVER</h3>
+<div id="disqover" class="section level2">
+<h2>DISQOVER</h2>
 <p>Metadata from RNAseq samples generated from patients is retrieved
 from DISQOVER. These data is merged from information on:</p>
 <ul>
@@ -493,8 +493,8 @@ If you need to select specific entries for exclusion or downstream
 analysis, use identifiers or metadata that differ from the actual IDs.
 If there is nothing to subset on, use row numbers or exclude it from the
 original metadata file.</p>
-<div id="importing-disqover-metadata" class="section level4">
-<h4>Importing DISQOVER metadata</h4>
+<div id="importing-disqover-metadata" class="section level3">
+<h3>Importing DISQOVER metadata</h3>
 <p>If you’re working on RNAseq data generated within our lab or center,
 you can import the merged metadata from a file stored in your work
 directory.</p>
@@ -505,8 +505,8 @@ metadata_df_raw &lt;- read.delim(
   na.strings = c(&quot;&quot;,&quot;NA&quot;) # Assign NA to empty and &quot;NA&quot; strings
   )</code></pre>
 </div>
-<div id="cleaning-disqover-metadata" class="section level4">
-<h4>Cleaning DISQOVER metadata</h4>
+<div id="cleaning-disqover-metadata" class="section level3">
+<h3>Cleaning DISQOVER metadata</h3>
 <p>In the past, DISQOVER has contained duplicate entries with different
 cram files from the same Biomaterial. Therefore, we will check for rows
 that contain duplicate information.</p>
@@ -526,8 +526,8 @@ if (!check_dup) {
 rownames(metadata_df_raw) &lt;- metadata_df_raw$Biomaterial.ID</code></pre>
 </div>
 </div>
-<div id="selecting-and-structuring-metadata" class="section level3">
-<h3>Selecting and structuring metadata</h3>
+<div id="selecting-and-structuring-metadata" class="section level2">
+<h2>Selecting and structuring metadata</h2>
 <p>Now that we have our raw metadata file, we can select the information
 we need and assign groups for the differential expression study.</p>
 <p>To perform transformations on our metadata file, we will use the
@@ -566,7 +566,7 @@ group ID’s for different cancer types.</p>
 <pre class="r"><code># Check for the available cancer types within our data
 unique(metadata_df_filt$ann_tumor_type)
 
-# Do some more filtering
+# Filter out NA values and &quot;other&quot; tumor types
 metadata_df_filt &lt;- metadata_df_filt %&gt;% 
   filter(!is.na(ann_tumor_type)) %&gt;%
   filter(ann_tumor_type != &quot;other&quot;)
@@ -599,8 +599,8 @@ metadata_df_filt &lt;- metadata_df_filt %&gt;%
 sample_metadata &lt;- metadata_df_filt</code></pre>
 </div>
 </div>
-<div id="gtf-annotation-file" class="section level2">
-<h2>GTF annotation file</h2>
+<div id="gtf-annotation-file" class="section level1">
+<h1>GTF annotation file</h1>
 <p>GTF annotation files provide information on genomic features, like
 the location and identities of genes, exons and transcripts. We can use
 rtracklayer to import information this information as a dataframe. As
@@ -625,8 +625,8 @@ analysis.</p>
   dplyr::select(transcript_id, gene_id, gene_name, gene_biotype) %&gt;%
   dplyr::distinct()</code></pre>
 </div>
-<div id="transcript-quantification-data" class="section level2">
-<h2>Transcript quantification data</h2>
+<div id="transcript-quantification-data" class="section level1">
+<h1>Transcript quantification data</h1>
 <p>Transcript quantifications, estimated through salmon by you or one of
 the bioinformaticians, should be stored in your working environment.
 Each quant.sf file must be placed in its own folder, named after the
@@ -650,8 +650,8 @@ require raw count data.</p>
 <pre class="r"><code># Import transcript level abundances
 tx_abundance &lt;- tximport::tximport(list_quantfiles, type = &quot;salmon&quot;, tx2gene =  tx2gene)</code></pre>
 </div>
-<div id="check-and-save-your-data" class="section level2">
-<h2>Check and save your data</h2>
+<div id="check-and-save-your-data" class="section level1">
+<h1>Check and save your data</h1>
 <p>Finally we make sure we’ve created all the necessary objects that we
 need, and that they align with each other. We then save this information
 in a .RData file. The objects we’ll need to continue our analysis

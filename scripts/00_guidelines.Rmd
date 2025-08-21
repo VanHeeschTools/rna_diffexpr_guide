@@ -1,0 +1,261 @@
+---
+title: "Project Guidelines"
+author: "Wouter Makkinje"
+date: "2025-08-15"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "htmls") })
+output:
+  html_document:
+    theme: default
+    highlight: textmate
+    toc: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+[NEXT PAGE --->](https://vanheeschtools.github.io/rna_diffexpr_guide/htmls/01_data_import.html)
+
+## Overview
+This file provides guidelines for working within an R project. Even if you have prior experience with R, we recommend reading it to understand our expectations for code style and project setup.
+If you are new to R or want to refresh the basics, I would recommend you go through [this guide](https://www.w3schools.com/r/r_intro.asp) for a quick introduction. Also, visit our [R Clickup page](https://app.clickup.com/20126659/v/dc/k66y3-5575/k66y3-54735) for more tutorials and guides.
+
+## Basics of RStudio and Rmarkdown
+### RStudio
+R is best utilised through the integrated development environment (IDE) RStudio. R Studio makes development of your R code more manageable through its user-friendly interface. It contains four panes:
+
+* Source: here you edit and execute your scripts or view objects within your environment (top left)
+* Console: this is where you can execute R code directly through the console an access the terminal (bottom left)
+* Environments: objects within your environment are listed and can be accessed here (top right) 
+* Output/System: this pane shows rendered plots, allows you to navigate your computer's file system and can be used to access information on R packages (bottom right)
+
+![Rstudio panes](../images/rstudio-panes-labeled.jpeg){#id .class width=65% height=65%}
+
+### R Markdown
+We prefer to use R Markdown scripts to write our code. R Markdown combines the basic text editing structure of a Markdown file with R scripts through code chunks. This allows you to explain your code and results in between the actual code that you're executing like it's a report, as you'll see throughout this guide. Visit [this website](https://rmarkdown.rstudio.com/authoring_quick_tour.html) for a quick tour and some syntax examples. To create a new R Markdown file, click the icon with the page containing a green plus in the top left corner and select "R Markdown..." or go to File > New File > "R Markdown...". Please use our standard template by clicking "Create Empty Document" after adding the default template to you RStudio configurations as described in the **[Clickup Rstudio Setup Guide](https://app.clickup.com/20126659/v/dc/k66y3-5575/k66y3-57635)**.
+
+To create a code chunk, click the green square icon containing a "c" on the top right of the Source pane or go to Code > Insert Chunk. To run code within the code chunks, click on the play button at the top right of the chunk, or click on the "Run" button next to the button for creating a chunk and select the option you prefer to use. You can also use the keyboard shortcuts displayed next to the options.
+
+```{r}
+# This is an example of what a code chunk looks like
+print("Hello World!")
+```
+
+As you can see, the output of a code chunk appears directly below it, so generate only one plot per chunk if possible.
+
+
+## Project design
+### R Projects
+
+Whenever you start working on a new project, you should start by creating an R project for it. Using R projects has two main advantages:
+
+1. It sets the root directory to the folder the project is located in. This is epecially useful for creating relative paths when you're collaborating
+2. All the scripts you were working on get loaded in every time you open the project
+
+To create an R project, click on the icon next to the icon for creating a file, or go to File > New Project..., and use an existing directory, or create a new one. This creates a .Rproj file that you can click to open the R project.
+
+### Folder structure
+
+To keep projects well organized, we use a clear folder structure. Create the following folders in your root directory, e.g. the directory where your .Rproj file it located:
+
+* /scripts: this is where you save your scripts
+* /data: here you store the raw data you're using for your analysis
+* /plots: this contains all the figures/plots you created with your analysis
+* /results: here you store the files resulting from your analysis
+
+Of course you can also create sub-folders for sub-analyses.
+
+This is what the project directory should look like:
+```
+de_analysis/
+ ├── data/
+     ├── sample1_name
+        └── quant.sf
+     ├── sample2_name
+        └── quant.sf
+     └── sample_metadata.tsv
+ ├── plots/
+     ├── heatmap.png
+     └── volcano_plot.png
+ ├── results/
+     ├── gtf_df.RDS
+     ├── meta_df.RDS
+     ├── txi_counts.RDS
+     └── dds.RDS
+ ├── scripts/
+     ├── 01_data_import.Rmd
+     ├── 02_qc_and_filtering.Rmd
+     ├── 03_deseq2_analysis.Rmd
+     ├── 04_functional_annotation.Rmd
+     ├── 05_visualisation.Rmd
+     ├── optional/
+        ├── go_enrichment_analysis.Rmd
+        ├── kegg_pathway_analysis.Rmd
+        └── subgroup_DE_analysis.Rmd
+ ├── de_analysis.Rproj
+ ├── de_analysis.RData
+ └── README.md
+```
+
+## Script design
+
+The most important aspect is how you design your scripts. If you don't follow these guidelines, you'll end up with one large document with all your code jumbled together and no specific order or explanations as to what each element does. This makes it very difficult for collaborators and yourself to follow and understand what steps you took and how to run your code.
+
+### Naming conventions
+
+There are certain conventions you should adhere to when assigning names. Objects, variables, functions and files are written in what we call snake_case, e.g. all lowercase and words are separated by "_". The only data types that deviate from this are constants, which are written in ALL_CAPS, classes which are written in UpperCamelCase and project and package names, which are written in all lower case without spaces or underscores. Most importantly, you should be consistent in the syntax you use for naming.
+
+Aside from the syntax, the clarity of object names is vital to make your understandable. Names should be descriptive and specific. Avoid cryptic names like "x", "temp", "df1" or "thing" and use "counts_raw", "sample_metadata" or "pca_plot" instead. Also append with qualifiers "_log2_normalised" or "_samples_1_to_3" to make the meaning unambiguous.
+
+### Top-to-bottom execution
+
+Make sure each script can be run from beginning to end without any errors. This means that whenever you change something upstream in your analysis, like the name or contents of an object, apply the same changes downstream in your analysis. Also take care that your script is linear such that none of the upstream code is dependent on downstream code. The order of execution should follow the order in which the code is written.
+
+To generate the final results from an analysis, you want to run all code at once from start to finish using "Run all" from the run options. That way, you make sure everything runs smoothly. In addition, the default template sets the seed at the start of the document, fixing the random number generator for reproducible results, but it only works if the entire script is run at once.
+
+### Commenting your code
+
+Commenting your code is very important for clarity, reusability and collaboration. As you might have noticed from the code chunk above, you can add comments to your code by prepending text with "#". Use these comments above code snippets to guide the reader through each transformation or analysis step you are performing. Be specific and clear. Comments can go at the end of a line as well as above a code block. Use inline comments for complex code with many steps, but only when they add useful context.
+
+Good commenting:
+```{r, results='hide', eval=FALSE}
+# Filter samples out of the metadata
+metadata_df_filt <- metadata_df %>% 
+  filter(is.na(Date.informed.consent.withdrawn)) %>% # Remove samples from patients who've withdrawn consent
+  filter(Age.at.first.diagnosis > 10) # Keep samples from patients older than 10
+```
+
+Also don't forget the strength of R Markdown in allowing you to add text in between code chunks. Include context, explanations and a rundown of your results in between your code chunks and use headings to separate sections of your analysis. Taking the code above as an example, you could include a rundown of all filtering steps you've applied to your metadata object in the markdown text, als "_filt" is not very descriptive. It is also good practice to include an executive summary at the start of each script that explains what your script does, e.g. what analyses are performed and which files are created.
+
+Finally, if you're writing a little bit more advanced scripts and are writing functions to execute your data transformations, we implore you to comment your functions using [roxygen headers](https://roxygen2.r-lib.org/).
+
+### Split up your analysis
+
+Instead of creating one large convoluted file, split up your analysis into several scripts that each serve their own purpose and number them accordingly. By numbering your scripts, collaborators know where your analysis starts and in what order your analysis was performed. It has the added benefit of ordering your scripts in your directory. As an example, our differential expression analysis example uses the following structure and naming convention:
+
+* 01_data_import.Rmd: import the raw data and restructure it to be used as objects within our R environment
+* 02_qc_and_filtering.Rmd: perform some quality controls like a principal component analysis and filter out lowly expressed genes
+* 03_deseq2_analysis.Rmd: perform the differential expression analysis using DESeq2
+* 04_functional_annotation.Rmd: functionally annotate your transcripts using GO or KEGG for functional analyses
+* 05_visualisation.Rmd: create visualisations for your results, like a heatmap
+
+You don't have to adhere to this structure specifically, as your analysis might look different. However, it is a good starting point.
+
+
+### Make each script independent
+
+When you split up your code, steps in the analysis you performed in previous scripts are not necessarily available in later scripts, making them dependent on each other. We don't want to have to reopen all previous scripts and run them one by one whenever we want to work on a script downstream in the analysis after closing RStudio. Therefore, each script should be self-contained and import all information it is dependent on to run at the start. We do this by saving and importing objects as individual .RDS files like so:
+
+```{r, results='hide', eval=FALSE}
+# To save an object as a .RDS file
+saveRDS(meta_df, file = "results/meta_df.RDS")
+
+# To import an RDS file and assign it to an object in your environment
+meta_df <- readRDS(file = "results/meta_df.RDS")
+```
+
+Using .RDS files lets you import only the specific objects that is necessary for your analysis. 
+
+Another option is to use a .RData file that saves your entire global environment and is linked to your .Rproj file. However, as your analysis gets larger, this forces you to import a lot of unnecessary information.
+
+Finally, you could also save the code that generates a certain object to a separate .R script and use the source("code.R") function to execute and import the contents of the script directly into your environment. You could then also include custom functions that automatically get imported, but this method is a bit too advanced for general use.
+
+## Collaboration
+
+To allow for effective collaboration, here are some considerations.
+
+### Specifying paths
+
+Whenever a collaborator is executing your code, files should be saved in their root directory using the same folder structure as yours. If this is not done correctly and the file paths are hard-coded, the script will not be able to access any files, or even worse, overwrite your files. A helpful R package to tackle this issue, is the here() package. This package makes it easy to interpret relative paths between systems. here() returns your current working directory, which is the same as the root directory of your R project.
+
+```{r, eval=FALSE}
+library("here") # Load the package
+here() # Returns your root directory
+saveRDS(meta_df, file = here("results", "meta_df.RDS")) # Saves the meta_df.RDS file to the results subdirectory, relative to the root directory of the user
+```
+
+Thus whenever you save a file, do so using relative paths through here. However, a collaborator might not have access to the same raw data as you. If you are working on the same system through the HPC, you can hard-code the path to importing this raw data so that your collaborator can always access it, but this should be the only reason for hard-coding paths. If you're not working on the same system, make sure your data is available through some other way, or include the code to access the raw data.
+
+### Github
+
+Git is a powerful version control tool and Github is an online web interface to interact with git. It is a widely used collaboration tool for programmers. We expect you to upload your code when concluding your project so that others can continue your work when you leave the group. It will be reviewed, so use this as motivation to adhere to the guidelines presented in this document.
+
+**A comprehensive guide on using Git can be found in our [Bioinformatics Wiki on Clickup](https://app.clickup.com/20126659/v/dc/k66y3-5575/k66y3-57555).**
+
+## Packages
+
+R has many packages containing very useful tools, some of which are used ubiquitously. It is good practice to prepend the package name using the namespace operator ```::``` when calling a function, to prevent conflicts between functions of the same name in different packages, e.g. ```dplyr::mutate()```.
+
+### How to use packages
+
+As described earlier, each script should be self-contained and able to run independently. This means you should load all required packages within the script itself, rather than relying on packages loaded elsewhere. Loading only the required packages keeps each script lightweight.
+
+Packages are installed using:
+```{r, eval=FALSE}
+install.packages("tidyverse")
+```
+Once a package is installed on your system, you don't need to re-run install.packages() when you re-open your script after closing unless you want to update the package. Thus, you can leave package installations out of your scripts or comment them out to notify your collaborator that a specific package was installed.
+
+**NOTE: Don't install packages when working on the HPC to avoid compatibility issues. Ask one of the bioinformaticians if you require a package that is not yet available.**
+
+Packages are loaded into your environment using:
+```{r, eval=FALSE}
+library("tidyverse")
+```
+
+You can get information on a package or a function using:
+```{r, eval=FALSE}
+help("tidyverse")
+vignette("readr") # For a often more comprehensive explanation with examples
+?mutate() # A function that is part of the dplyr package, which is part of the tidyverse collection.
+```
+
+Some packages are distributed through specialised ecosystems, such as Bioconductor. Installing Bioconductor packages requires a different process, but once installed, they are loaded in the same way with library(). If you were to simply use:
+
+```{r, eval=FALSE}
+install.packages("DESeq2")
+```
+
+You'll likely get this error:
+```
+Warning in install.packages :
+  package ‘DESeq2’ is not available for this version of R
+```
+
+If you ever see this error, it is likely that you made this mistake. Install Bioconductor packages using:
+```{r, results='hide', eval=FALSE}
+# If BiocManager is not yet installed
+if (!require("BiocManager", quietly = TRUE)) 
+    install.packages("BiocManager")
+
+# Installing a package
+BiocManager::install("DESeq2")
+```
+
+### Popular packages
+
+Some of the most popular and widely used packages are:
+
+* Members of tidyverse
+  * readr - importing and writing tables in different formats
+  * dplyr - data transformation, like filtering, sorting and modifying data frames or other tabular data
+  * tidyr - data reshaping, like splitting or combining columns
+  * magrittr - piping output using "%>%" (loaded as part of tidyverse)
+  * ggplot2 - creating all kinds of plots
+  * forcats - working with factors for categorical variables, like grouping samples under a specific type in a plot
+* here - consistency in relative path specification
+* readxl - read Excel .xls and .xlsx files.
+* remotes - installing packages directly from github (or use devtools)
+* roxygen2 - standardised documentation for functions
+
+Some tools specific to bioinformatics from Bioconductor:
+
+* DESeq2 - differential expression studies
+* ComplexHeatmap - creating heatmaps
+* GenomicFeatures - querying the gene models of a given organism/assembly through a TxDb object
+* limma - used for microarray and RNA-seq analyses, but contains some other handy tools
+
+You can take some time to read the vignettes of some of these tools. Especially dplyr, tidyr and the piping tool from magrittr are very powerful tools, which we will use throughout this guide.
+
+[NEXT PAGE --->](https://vanheeschtools.github.io/rna_diffexpr_guide/htmls/01_data_import.html)
